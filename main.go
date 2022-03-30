@@ -10,53 +10,61 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/u-root/uio/cp"
 )
 
 var (
-	home string
-	V    = log.Printf
+	version = "go1.17.7"
+	V       = log.Printf
 )
 
-func tree(gotoolchain string, args ...string) (string, error) {
-	d, err := os.MkdirTemp("", "sourcery")
-	if err != nil {
-		return "", err
+func clone(d, v, r string) error {
+	cmd := []string{"clone", "--depth", "1"}
+	if len(v) > 0 {
+		cmd = append(cmd, "-b", v)
 	}
-	opts := cp.Options{
-		NoFollowSymlinks: true,
+	cmd = append(cmd, r)
+	c := exec.Command("git", cmd...)
+	c.Dir = d
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	if err := c.Run(); err != nil {
+		return err
 	}
-	err = nil
-	for i, dir := range append([]string{gotoolchain}, args...) {
-		b := "go"
-		if i > 0 {
-			b = filepath.Join("src", filepath.Base(dir))
-		}
-		if !filepath.HasPrefix(dir, home) {
-			err = multierror.Append(err, fmt.Errorf("%q does not have %q as a prefix", dir, home))
-		}
-		b = filepath.Join(d, b)
-		V("Copy %q -> %q", dir, b)
-		if e := opts.CopyTree(dir, b); e != nil {
-			err = multierror.Append(err, e)
-		}
-	}
-	return d, err
+	return nil
 }
 
-func env() error {
-	var (
-		ok  bool
-		err error
-	)
-	home, ok = os.LookupEnv("HOME")
-	if !ok {
-		err = multierror.Append(fmt.Errorf("$HOME is not set"))
+func getgo(d, v string) error {
+	c := exec.Command("git", "clone", "-b", version, "--depth", "1", "git@github.com:golang/go")
+	c.Dir = d
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	if err := c.Run(); err != nil {
+		return err
+	}
+	// simply sanity check
+	gover := filepath.Join(d, "go", "VERSION")
+	dat, err := ioutil.ReadFile(gover)
+	if err != nil {
+		return fmt.Errorf("Reading %q: %v", gover, err)
+	}
+	if string(dat) != version {
+		return fmt.Errorf("Version file has %q, but want version %q", string(dat), version)
+	}
+	return nil
+}
+
+func get(target string, args ...string) error {
+	var err error
+	for _, d := range args {
+		if e := clone(target, "", d); err != nil {
+			err = multierror.Append(err, e)
+			continue
+		}
 	}
 	return err
 }
@@ -64,21 +72,23 @@ func env() error {
 func main() {
 	flag.Parse()
 
-	if err := env(); err != nil {
-		log.Fatal(err)
-	}
-	a := flag.Args()
-	if len(a) == 0 {
-		log.Fatal("Usage: sourcery go-toolchain [args...]")
-	}
 	// Build the target directory
 	// Start with a temporary directory
 	// copy the toolchain there
 	// copy the rest of the other directories there
 
-	tree, err := tree(a[0], a[1:]...)
+	d, err := os.MkdirTemp("", "sourcery")
+	defer fmt.Printf("Tree is %q\n", d)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("The tree is in %q", tree)
+	if err := getgo(d, version); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(d, "src"), 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := get(filepath.Join(d, "src"), flag.Args()...); err != nil {
+		log.Fatalf("Getting packages: %v", err)
+	}
 }
