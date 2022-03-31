@@ -62,6 +62,18 @@ func tidy(tmp, dir, base string) error {
 	return nil
 }
 
+func download(tmp, dir, base string) error {
+	c := exec.Command("go", "mod", "download")
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = append(c.Env, "GOPATH="+tmp)
+	c.Dir = filepath.Join(tmp, dir, base)
+	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
+	if err := c.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func modinit(tmp, host, dir, base string) error {
 	path := filepath.Join(tmp, dir, base)
 	V("modinit: check %q for go.mod", path)
@@ -163,6 +175,7 @@ func get(target string, args ...string) error {
 			err = multierror.Append(err, fmt.Errorf("%q: %v", d, err))
 			continue
 		}
+		dir = filepath.Join(host, dir)
 		V("goName for %q: %q, %q, %q", d, host, dir, base)
 		if e := clone(target, "", d, dir, base); err != nil {
 			err = multierror.Append(err, e)
@@ -174,6 +187,10 @@ func get(target string, args ...string) error {
 			continue
 		}
 		if e := tidy(target, dir, base); e != nil {
+			err = multierror.Append(err, e)
+			continue
+		}
+		if e := download(target, dir, base); e != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
@@ -218,7 +235,7 @@ func main() {
 	}
 	goBin := filepath.Join(d, bin, "installcommand")
 	V("Build the installcommand in %q", goBin)
-	if err := build(d, "src/u-root/sourcery/installcommand", goBin); err != nil {
+	if err := build(d, "src/github.com/u-root/sourcery/installcommand", goBin); err != nil {
 		log.Fatalf("Building installcommand: %v", err)
 	}
 }

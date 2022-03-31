@@ -31,9 +31,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
-	"github.com/u-root/u-root/pkg/golang"
 	"github.com/u-root/u-root/pkg/upath"
 )
 
@@ -156,14 +156,22 @@ func main() {
 		run(destFile, form)
 	}
 
-	env := golang.Default()
-	env.Context.GOROOT = r("/go")
-	env.Context.GOPATH = r("/")
-	env.Context.CgoEnabled = false
+	// I still don't know if I really need this, and it's inflexible as to where the
+	// go compiler lives. Skip it.
+	//env := golang.Default()
+	//env.Context.GOROOT = r("/go")
+	//env.Context.GOPATH = r("/")
+	//env.Context.CgoEnabled = false
 
 	v("Build %q install into %q", form.srcPath, destFile)
-	if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{}); err != nil {
-		log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
+	//if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{ExtraArgs: []string{"-x",}}); err != nil {
+	//log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
+	//}
+	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-x", "-o", destFile)
+	c.Dir = form.srcPath
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	if err := c.Run(); err != nil {
+		log.Fatal(err)
 	}
 
 	v("Run it?")
