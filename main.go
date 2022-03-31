@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/hashicorp/go-multierror"
 	url "github.com/whilp/git-urls"
@@ -26,15 +27,19 @@ var (
 	V       = log.Printf
 )
 
-func clone(d, v, r string) error {
-	V("clone: %q, %q, %q", d, v, r)
-	cmd := []string{"clone", "--depth", "1"}
-	if len(v) > 0 {
-		cmd = append(cmd, "-b", v)
+func clone(tmp, version, repo, dir, base string) error {
+	V("clone: %q, %q, %q", tmp, version, dir, base)
+	dest := filepath.Join(tmp, dir)
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return err
 	}
-	cmd = append(cmd, r)
+	cmd := []string{"clone", "--depth", "1"}
+	if len(version) > 0 {
+		cmd = append(cmd, "-b", version)
+	}
+	cmd = append(cmd, repo)
 	c := exec.Command("git", cmd...)
-	c.Dir = d
+	c.Dir = dest
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
 		return err
@@ -42,11 +47,11 @@ func clone(d, v, r string) error {
 	return nil
 }
 
-func tidy(d, r string) error {
+func tidy(tmp, dir, base string) error {
 	c := exec.Command("go", "mod", "tidy")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
-	c.Env = append(c.Env, "GOPATH="+d)
-	c.Dir = filepath.Join(d, filepath.Base(r))
+	c.Env = append(c.Env, "GOPATH="+tmp)
+	c.Dir = filepath.Join(tmp, dir, base)
 	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
 	if err := c.Run(); err != nil {
 		return err
@@ -54,17 +59,17 @@ func tidy(d, r string) error {
 	return nil
 }
 
-func modinit(d, h, r string) error {
-	dir := filepath.Join(d, r)
-	V("modinit: check %q for go.mod", dir)
-	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+func modinit(tmp, host, dir, base string) error {
+	path := filepath.Join(tmp, dir, base)
+	V("modinit: check %q for go.mod", path)
+	if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
 		V("modinit: it has go.mod")
 		return nil
 	}
-	c := exec.Command("go", "mod", "init", filepath.Join(h, r))
+	c := exec.Command("go", "mod", "init", filepath.Join(host, dir, base))
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
-	c.Env = append(c.Env, "GOPATH="+d)
-	c.Dir = dir
+	c.Env = append(c.Env, "GOPATH="+tmp)
+	c.Dir = path
 	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
 	if err := c.Run(); err != nil {
 		return err
@@ -91,10 +96,45 @@ func getgo(d, v string) error {
 	return nil
 }
 
-func goName(p string) (string, string, error) {
+func build(tmp, dir, bin string) error {
+	c := exec.Command("go", "build", "-o", bin)
+	c.Dir = filepath.Join(tmp, dir)
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	//	c.Env = append(c.Env, "CGO_ENABLED=0")
+	if err := c.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// buildToolchain builds the needed Go toolchain binaries: go, compile, link,
+// asm.
+func buildToolchain(tmp string) error {
+	goBin := filepath.Join(tmp, "go/bin/go")
+
+	// let's not worry about this atm. We don't care about the size any more.
+	//tcbo := golang.BuildOpts{
+	//ExtraArgs: []string{"-tags", "cmd_go_bootstrap"},
+	//}
+	var err error
+	if e := build(tmp, "go/src/cmd/go", goBin); e != nil {
+		err = multierror.Append(err, e)
+	}
+
+	toolDir := filepath.Join(tmp, fmt.Sprintf("go/pkg/tool/%v_%v", runtime.GOOS, runtime.GOARCH))
+	for _, pkg := range []string{"compile", "link", "asm"} {
+		c := filepath.Join(toolDir, pkg)
+		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
+			err = multierror.Append(err, e)
+		}
+	}
+	return err
+}
+
+func goName(p string) (string, string, string, error) {
 	u, err := url.ParseScp(p)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	// The `Host` contains both the hostname and the port,
 	// if present. Use `SplitHostPort` to extract them.
@@ -103,29 +143,30 @@ func goName(p string) (string, string, error) {
 	if err != nil {
 		host = u.Host
 	}
-	return host, u.Path, nil
+	return host, filepath.Dir(u.Path), filepath.Base(u.Path), nil
 }
 
 func get(target string, args ...string) error {
 	var err error
 	for _, d := range args {
 		V("Get %q", d)
-		if e := clone(target, "", d); err != nil {
-			err = multierror.Append(err, e)
-			continue
-		}
-		h, p, err := goName(d)
+		host, dir, base, err := goName(d)
 		if err != nil {
 			V("URL %q: %v", d, err)
 			err = multierror.Append(err, fmt.Errorf("%q: %v", d, err))
 			continue
 		}
-		V("goName for %q: %q, %q", d, h, p)
-		if e := modinit(target, h, p); e != nil {
+		V("goName for %q: %q, %q, %q", d, host, dir, base)
+		if e := clone(target, "", d, dir, base); err != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
-		if e := tidy(target, d); e != nil {
+
+		if e := modinit(target, host, dir, base); e != nil {
+			err = multierror.Append(err, e)
+			continue
+		}
+		if e := tidy(target, dir, base); e != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
@@ -146,13 +187,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := getgo(d, version); err != nil {
+		log.Printf("getgo errored, %v, keep going", err)
+	}
+	if err := buildToolchain(d); err != nil {
+		log.Fatal(err)
+	}
 	if err := os.Mkdir(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
 	if err := get(filepath.Join(d, "src"), flag.Args()...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
-	}
-	if err := getgo(d, version); err != nil {
-		log.Fatal(err)
 	}
 }
