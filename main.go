@@ -25,8 +25,9 @@ import (
 var (
 	version = "go1.17.7"
 	V       = log.Printf
-	arch = runtime.GOARCH
-	kern = runtime.GOOS
+	arch    = runtime.GOARCH
+	kern    = runtime.GOOS
+	bin     string
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -112,7 +113,10 @@ func build(tmp, dir, bin string) error {
 // buildToolchain builds the needed Go toolchain binaries: go, compile, link,
 // asm.
 func buildToolchain(tmp string) error {
-	goBin := filepath.Join(tmp, "go/bin/go")
+	// The traditional location for go is go/bin/go.
+	// We are building for multi-architecture, so the traditional
+	// location is wrong.
+	goBin := filepath.Join(tmp, bin, "go")
 
 	// let's not worry about this atm. We don't care about the size any more.
 	//tcbo := golang.BuildOpts{
@@ -123,7 +127,7 @@ func buildToolchain(tmp string) error {
 		err = multierror.Append(err, e)
 	}
 
-	toolDir := filepath.Join(tmp, fmt.Sprintf("go/pkg/tool/%v_%v", kern, arch))
+	toolDir := filepath.Join(tmp, "go/pkg/tool", bin)
 	for _, pkg := range []string{"compile", "link", "asm"} {
 		c := filepath.Join(toolDir, pkg)
 		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
@@ -199,19 +203,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
 	if err := getgo(d, version); err != nil {
 		log.Printf("getgo errored, %v, keep going", err)
 	}
 	if err := buildToolchain(d); err != nil {
 		log.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(d, "src"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
 	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
 	}
-	goBin := filepath.Join(d, "buildbin/installcommand")
+	goBin := filepath.Join(d, bin, "installcommand")
+	V("Build the installcommand in %q", goBin)
 	if err := build(d, "src/u-root/sourcery/installcommand", goBin); err != nil {
 		log.Fatalf("Building installcommand: %v", err)
 	}

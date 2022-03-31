@@ -42,7 +42,8 @@ var (
 	exe    = flag.Bool("exec", true, "build AND execute the command")
 	force  = flag.Bool("force", false, "build even if a file already exists at the destination")
 
-	verbose = flag.Bool("v", false, "print all build commands")
+	verbose = flag.Bool("v", true, "print all build commands")
+	v       = func(string, ...interface{}) {}
 	r       = upath.UrootPath
 )
 
@@ -53,6 +54,7 @@ type form struct {
 	cmdArgs []string
 
 	// Args intended for installcommand
+	srcPath string
 	lowPri  bool
 	exec    bool
 	force   bool
@@ -66,15 +68,14 @@ func usage() {
 
 // Parse the command line to determine the form.
 func parseCommandLine() form {
-	// First form:
-	//     SYMLINK [ARGS...]
-	if !strings.HasSuffix(os.Args[0], "installcommand") {
-		// This is almost certain to be a symlink, and it's no harm
-		// to check it.
-		f := upath.ResolveUntilLastSymlink(os.Args[0])
+	// First form: 3 args first having a base of installcommand.
+	// N.B. sourcery uses #! files, not symlinks.
+	// no symlinks on vfat.
+	if filepath.Base(os.Args[0]) == "installcommand" {
 		return form{
-			cmdName: filepath.Base(f),
-			cmdArgs: os.Args[1:],
+			cmdName: filepath.Base(os.Args[2]),
+			cmdArgs: os.Args[2:],
+			srcPath: os.Args[1],
 			lowPri:  *lowpri,
 			exec:    *exe,
 			force:   *force,
@@ -118,8 +119,23 @@ func run(n string, form form) {
 	os.Exit(0)
 }
 
+// The kernel will give is this:
+// ["/linux_amd64/bin/installcommand" "#!/src/github.com/u-root/u-root/cmds/core/date" "/linux_amd64/bin/date"]
+// args[0] tells us we were invoked as the installcommand.
+// args[1] tells us the path to source -- no more filepath.Walk!
+// args[2] the kernel kindly gives us as the path used -- we can use filepath.Base for the command
+// We'll adjust args[1] just to save work.
 func main() {
+	if *verbose {
+		v = log.Printf
+	}
+	v("installcommand called with %q", os.Args)
+	// adjust the name if it starts with #!
+	if strings.HasPrefix(os.Args[1], "#!") {
+		os.Args[1] = os.Args[1][2:]
+	}
 	form := parseCommandLine()
+	v("form is %q", form)
 
 	if form.lowPri {
 		if err := lowpriority(); err != nil {
@@ -128,6 +144,7 @@ func main() {
 	}
 
 	destFile := filepath.Join(r("/ubin"), form.cmdName)
+	v("destFile is %q", destFile)
 
 	// Is the command there? This covers a race condition
 	// in that some other process may have caused it to be
@@ -144,32 +161,12 @@ func main() {
 	env.Context.GOPATH = r("/")
 	env.Context.CgoEnabled = false
 
-	var srcDir string
-	err := filepath.Walk(r("/src"), func(p string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		if fi.IsDir() && filepath.Base(p) == form.cmdName {
-			// Make sure it's an actual Go command.
-			pkg, err := env.PackageByPath(p)
-			if err == nil && pkg.IsCommand() {
-				srcDir = p
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	if len(srcDir) == 0 {
-		log.Fatalf("Can not find source code for %q", form.cmdName)
-	}
-
-	if err := env.BuildDir(srcDir, destFile, golang.BuildOpts{}); err != nil {
+	v("Build %q install into %q", form.srcPath, destFile)
+	if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{}); err != nil {
 		log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
 	}
 
+	v("Run it?")
 	if form.exec {
 		run(destFile, form)
 	}
