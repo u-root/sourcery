@@ -25,6 +25,8 @@ import (
 var (
 	version = "go1.17.7"
 	V       = log.Printf
+	arch = runtime.GOARCH
+	kern = runtime.GOOS
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -121,7 +123,7 @@ func buildToolchain(tmp string) error {
 		err = multierror.Append(err, e)
 	}
 
-	toolDir := filepath.Join(tmp, fmt.Sprintf("go/pkg/tool/%v_%v", runtime.GOOS, runtime.GOARCH))
+	toolDir := filepath.Join(tmp, fmt.Sprintf("go/pkg/tool/%v_%v", kern, arch))
 	for _, pkg := range []string{"compile", "link", "asm"} {
 		c := filepath.Join(toolDir, pkg)
 		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
@@ -175,8 +177,17 @@ func get(target string, args ...string) error {
 	return err
 }
 
+func init() {
+	if a, ok := os.LookupEnv("GOARCH"); ok {
+		arch = a
+	}
+	if a, ok := os.LookupEnv("GOOS"); ok {
+		kern = a
+	}
+}
 func main() {
 	flag.Parse()
+	V("Building for %v_%v", arch, kern)
 
 	// Build the target directory
 	// Start with a temporary directory
