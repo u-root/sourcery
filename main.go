@@ -39,6 +39,18 @@ func clone(d, v, r string) error {
 	return nil
 }
 
+func tidy(d, r string) error {
+	c := exec.Command("go", "mod", "tidy")
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = append(c.Env, "GOPATH="+d)
+	c.Dir = filepath.Join(d, filepath.Base(r))
+	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
+	if err := c.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getgo(d, v string) error {
 	c := exec.Command("git", "clone", "-b", version, "--depth", "1", "git@github.com:golang/go")
 	c.Dir = d
@@ -62,6 +74,10 @@ func get(target string, args ...string) error {
 	var err error
 	for _, d := range args {
 		if e := clone(target, "", d); err != nil {
+			err = multierror.Append(err, e)
+			continue
+		}
+		if e := tidy(target, d); e != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
