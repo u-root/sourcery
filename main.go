@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/hashicorp/go-multierror"
+	url "github.com/whilp/git-urls"
 )
 
 var (
@@ -25,6 +27,7 @@ var (
 )
 
 func clone(d, v, r string) error {
+	V("clone: %q, %q, %q", d, v, r)
 	cmd := []string{"clone", "--depth", "1"}
 	if len(v) > 0 {
 		cmd = append(cmd, "-b", v)
@@ -51,6 +54,24 @@ func tidy(d, r string) error {
 	return nil
 }
 
+func modinit(d, h, r string) error {
+	dir := filepath.Join(d, r)
+	V("modinit: check %q for go.mod", dir)
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		V("modinit: it has go.mod")
+		return nil
+	}
+	c := exec.Command("go", "mod", "init", filepath.Join(h, r))
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = append(c.Env, "GOPATH="+d)
+	c.Dir = dir
+	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
+	if err := c.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getgo(d, v string) error {
 	c := exec.Command("git", "clone", "-b", version, "--depth", "1", "git@github.com:golang/go")
 	c.Dir = d
@@ -70,10 +91,37 @@ func getgo(d, v string) error {
 	return nil
 }
 
+func goName(p string) (string, string, error) {
+	u, err := url.ParseScp(p)
+	if err != nil {
+		return "", "", err
+	}
+	// The `Host` contains both the hostname and the port,
+	// if present. Use `SplitHostPort` to extract them.
+	fmt.Println(u.Host)
+	host, _, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		host = u.Host
+	}
+	return host, u.Path, nil
+}
+
 func get(target string, args ...string) error {
 	var err error
 	for _, d := range args {
+		V("Get %q", d)
 		if e := clone(target, "", d); err != nil {
+			err = multierror.Append(err, e)
+			continue
+		}
+		h, p, err := goName(d)
+		if err != nil {
+			V("URL %q: %v", d, err)
+			err = multierror.Append(err, fmt.Errorf("%q: %v", d, err))
+			continue
+		}
+		V("goName for %q: %q, %q", d, h, p)
+		if e := modinit(target, h, p); e != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
@@ -98,13 +146,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := getgo(d, version); err != nil {
-		log.Fatal(err)
-	}
 	if err := os.Mkdir(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
 	if err := get(filepath.Join(d, "src"), flag.Args()...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
+	}
+	if err := getgo(d, version); err != nil {
+		log.Fatal(err)
 	}
 }
