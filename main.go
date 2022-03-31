@@ -128,6 +128,7 @@ func buildToolchain(tmp string) error {
 			err = multierror.Append(err, e)
 		}
 	}
+
 	return err
 }
 
@@ -196,7 +197,11 @@ func main() {
 	if err := os.Mkdir(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
-	if err := get(filepath.Join(d, "src"), flag.Args()...); err != nil {
+	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
+	}
+	goBin := filepath.Join(d, "buildbin/installcommand")
+	if err := build(d, "src/u-root/sourcery/installcommand", goBin); err != nil {
+		log.Fatalf("Building installcommand: %v", err)
 	}
 }
