@@ -64,18 +64,6 @@ func tidy(tmp, dir, base string) error {
 	return nil
 }
 
-func download(tmp, dir, base string) error {
-	c := exec.Command("go", "mod", "download")
-	c.Stdout, c.Stderr = os.Stdout, os.Stderr
-	c.Env = append(c.Env, "GOPATH="+tmp)
-	c.Dir = filepath.Join(tmp, dir, base)
-	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
-	if err := c.Run(); err != nil {
-		return err
-	}
-	return nil
-}
-
 func modinit(tmp, host, dir, base string) error {
 	path := filepath.Join(tmp, dir, base)
 	V("modinit: check %q for go.mod", path)
@@ -178,10 +166,6 @@ func get(target string, args ...string) error {
 			continue
 		}
 		if e := tidy(target, dir, base); e != nil {
-			err = multierror.Append(err, e)
-			continue
-		}
-		if e := download(target, dir, base); e != nil {
 			err = multierror.Append(err, e)
 			continue
 		}
