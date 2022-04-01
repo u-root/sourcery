@@ -167,9 +167,10 @@ func main() {
 	//if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{ExtraArgs: []string{"-x",}}); err != nil {
 	//log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
 	//}
-	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-x", "-o", destFile)
+	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-buildvcs=false", "-x", "-o", destFile)
 	c.Dir = form.srcPath
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = append(c.Env, []string{"GOCACHE=/.cache", "GOROOT=/go", "GOPATH=/src",}...)
 	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
