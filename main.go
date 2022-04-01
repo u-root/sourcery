@@ -206,6 +206,37 @@ func init() {
 		kern = a
 	}
 }
+
+func tree(d string) error {
+	var err error
+	for _, n := range []string{"tmp", "dev", "etc"} {
+		if e := os.MkdirAll(filepath.Join(d, n), 0755); e != nil {
+			err = multierror.Append(err, e)
+		}
+	}
+	return err
+}
+
+func files(bin string) error {
+	var err error
+	if err = os.MkdirAll(bin, 0755); err != nil {
+		return err
+	}
+
+	for _, n := range []string{
+		"/src/github.com/u-root/cpu/cmds/cpud",
+		"/src/github.com/u-root/cpu/cmds/cpu",
+	} {
+		f := filepath.Join(bin, filepath.Base(n))
+		dat := []byte("#!/linux_amd64/bin/installcommand #!" + n + "\n")
+		V("Write %q with %q", f, dat)
+		if e := ioutil.WriteFile(f, dat, 0644); e != nil {
+			err = multierror.Append(err, e)
+		}
+	}
+	return err
+}
+
 func main() {
 	flag.Parse()
 	V("Building for %v_%v", arch, kern)
@@ -220,7 +251,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := tree(d); err != nil {
+		log.Fatal(err)
+	}
 	bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
+	if err := files(filepath.Join(d, bin)); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := getgo(d, version); err != nil {
 		log.Printf("getgo errored, %v, keep going", err)
 	}
