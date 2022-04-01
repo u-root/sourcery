@@ -28,6 +28,7 @@ var (
 	arch    = runtime.GOARCH
 	kern    = runtime.GOOS
 	bin     string
+	testrun = true
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -111,8 +112,9 @@ func getgo(d, v string) error {
 	return nil
 }
 
-func build(tmp, dir, bin string) error {
+func build(tmp, dir, bin string, extra ...string) error {
 	c := exec.Command("go", "build", "-o", bin)
+	c.Args = append(c.Args, extra...)
 	c.Dir = filepath.Join(tmp, dir)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	//	c.Env = append(c.Env, "CGO_ENABLED=0")
@@ -135,12 +137,12 @@ func buildToolchain(tmp string) error {
 	//ExtraArgs: []string{"-tags", "cmd_go_bootstrap"},
 	//}
 	var err error
-	if e := build(tmp, "go/src/cmd/go", goBin); e != nil {
+	if e := build(tmp, "go/src/cmd/go", goBin, "-tags", "cmd_go_bootstrap"); e != nil {
 		err = multierror.Append(err, e)
 	}
 
-	toolDir := filepath.Join(tmp, "go/pkg/tool", bin)
-	for _, pkg := range []string{"compile", "link", "asm"} {
+	toolDir := filepath.Join(tmp, "go/pkg/tool", filepath.Dir(bin))
+	for _, pkg := range []string{"compile", "link", "asm", "buildid"} {
 		c := filepath.Join(toolDir, pkg)
 		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
 			err = multierror.Append(err, e)
@@ -230,7 +232,7 @@ func files(bin string) error {
 		f := filepath.Join(bin, filepath.Base(n))
 		dat := []byte("#!/linux_amd64/bin/installcommand #!" + n + "\n")
 		V("Write %q with %q", f, dat)
-		if e := ioutil.WriteFile(f, dat, 0644); e != nil {
+		if e := ioutil.WriteFile(f, dat, 0755); e != nil {
 			err = multierror.Append(err, e)
 		}
 	}
@@ -245,6 +247,10 @@ func main() {
 	// Start with a temporary directory
 	// copy the toolchain there
 	// copy the rest of the other directories there
+	pwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	d, err := os.MkdirTemp("", "sourcery")
 	defer fmt.Printf("Tree is %q\n", d)
@@ -271,9 +277,17 @@ func main() {
 	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
 	}
+
 	goBin := filepath.Join(d, bin, "installcommand")
 	V("Build the installcommand in %q", goBin)
 	if err := build(d, "src/github.com/u-root/sourcery/installcommand", goBin); err != nil {
 		log.Fatalf("Building installcommand: %v", err)
 	}
+
+	goBin = filepath.Join(d, bin, "init")
+	V("Build the init in %q", goBin)
+	if err := build(pwd, "init", goBin); err != nil {
+		log.Fatalf("Building init: %v", err)
+	}
+	log.Printf("sudo strace -o shit -f unshare -m chroot %q /linux_amd64/bin/init", d)
 }
