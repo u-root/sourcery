@@ -209,6 +209,7 @@ func files(tmp, bin string) error {
 	for _, n := range []string{
 		"/src/github.com/u-root/cpu/cmds/cpud",
 		"/src/github.com/u-root/cpu/cmds/cpu",
+		"/src/github.com/u-root/u-root/cmds/core/elvish",
 	} {
 		f := filepath.Join(bin, filepath.Base(n))
 		dat := []byte("#!/linux_amd64/bin/installcommand #!" + n + "\n")
@@ -265,7 +266,7 @@ func main() {
 
 	goBin := filepath.Join(d, bin, "installcommand")
 	V("Build the installcommand in %q", goBin)
-	if err := build(d, "src/github.com/u-root/sourcery/installcommand", goBin); err != nil {
+	if err := build(pwd, "installcommand", goBin); err != nil {
 		log.Fatalf("Building installcommand: %v", err)
 	}
 

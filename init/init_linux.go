@@ -76,6 +76,7 @@ func osInitGo() *initCmds {
 			// be an inito if we are building on an existing initramfs. All
 			// initos need their own pid space.
 			Command("/linux_amd64/bin/cpud", WithArguments("-init", "-d")),
+			Command("/linux_amd64/bin/elvish"),
 			Command("/inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
 
 			Command("/bbin/uinit", ctty, uinitArgs),

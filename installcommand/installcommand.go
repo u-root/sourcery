@@ -71,10 +71,15 @@ func parseCommandLine() form {
 	// First form: 3 args first having a base of installcommand.
 	// N.B. sourcery uses #! files, not symlinks.
 	// no symlinks on vfat.
+	var args []string
+	if len(os.Args) > 2 {
+		args = os.Args[3:]
+	}
+
 	if filepath.Base(os.Args[0]) == "installcommand" {
 		return form{
 			cmdName: filepath.Base(os.Args[2]),
-			cmdArgs: os.Args[2:],
+			cmdArgs: args,
 			srcPath: os.Args[1],
 			lowPri:  *lowpri,
 			exec:    *exe,
@@ -109,13 +114,16 @@ func run(n string, form form) {
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
+	v("cmd.Run %q %q", n, form.cmdArgs)
 	if err := cmd.Run(); err != nil {
+		v("cmd.Run of (%q, %q) returns %v", n, form.cmdArgs, err)
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {
 			log.Fatal(err)
 		}
 		exitWithStatus(exitErr)
 	}
+	v("cmd.Run returns OK")
 	os.Exit(0)
 }
 
@@ -126,7 +134,7 @@ func run(n string, form form) {
 // args[2] the kernel kindly gives us as the path used -- we can use filepath.Base for the command
 // We'll adjust args[1] just to save work.
 func main() {
-	if *verbose {
+	if *verbose || true {
 		v = log.Printf
 	}
 	v("installcommand called with %q", os.Args)
@@ -156,26 +164,16 @@ func main() {
 		run(destFile, form)
 	}
 
-	// I still don't know if I really need this, and it's inflexible as to where the
-	// go compiler lives. Skip it.
-	//env := golang.Default()
-	//env.Context.GOROOT = r("/go")
-	//env.Context.GOPATH = r("/")
-	//env.Context.CgoEnabled = false
-
 	v("Build %q install into %q", form.srcPath, destFile)
-	//if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{ExtraArgs: []string{"-x",}}); err != nil {
-	//log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
-	//}
 	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-v", "-x", "-o", destFile)
 	c.Dir = form.srcPath
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
-	c.Env = append(c.Env, []string{"GOCACHE=/.cache", "CGO_ENABLED=0", "GOROOT=/go", "GOPATH=/src",}...)
+	c.Env = append(c.Env, []string{"GOCACHE=/.cache", "CGO_ENABLED=0", "GOROOT=/go", "GOPATH=/src"}...)
 	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
 
-	v("Run it?")
+	v("Run it? %q from form %v", destFile, form)
 	if form.exec {
 		run(destFile, form)
 	}

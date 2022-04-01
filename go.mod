@@ -16,6 +16,6 @@ require (
 	github.com/klauspost/pgzip v1.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.11 // indirect
 	github.com/ulikunitz/xz v0.5.8 // indirect
-	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
+	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f // indirect
 )
