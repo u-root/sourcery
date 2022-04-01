@@ -127,31 +127,18 @@ func build(tmp, dir, bin string, extra ...string) error {
 }
 
 // buildToolchain builds the needed Go toolchain binaries: go, compile, link,
-// asm.
+// asm. We can no longer do this without the script. Damn.
+// TODO: figure out what files we can remove.
 func buildToolchain(tmp string) error {
-	// The traditional location for go is go/bin/go.
-	// We are building for multi-architecture, so the traditional
-	// location is wrong.
-	goBin := filepath.Join(tmp, bin, "go")
-
-	// let's not worry about this atm. We don't care about the size any more.
-	//tcbo := golang.BuildOpts{
-	//ExtraArgs: []string{"-tags", "cmd_go_bootstrap"},
-	//}
-	var err error
-	if e := build(tmp, "go/src/cmd/go", goBin, "-tags", "cmd_go_bootstrap"); e != nil {
-		err = multierror.Append(err, e)
+	c := exec.Command("bash", "make.bash")
+	c.Dir = filepath.Join(tmp, "go/src")
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = os.Environ()
+	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
+	if err := c.Run(); err != nil {
+		return err
 	}
-
-	toolDir := filepath.Join(tmp, "go/pkg/tool", filepath.Dir(bin))
-	for _, pkg := range []string{"compile", "link", "asm", "buildid", "pack"} {
-		c := filepath.Join(toolDir, pkg)
-		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
-			err = multierror.Append(err, e)
-		}
-	}
-
-	return err
+	return nil
 }
 
 func goName(p string) (string, string, string, error) {
@@ -231,7 +218,8 @@ func files(tmp, bin string) error {
 		return err
 	}
 
-	if err := cp.Copy(filepath.Join(tmp, "/go/src/runtime/textflag.h"), filepath.Join(tmp, "/go/pkg/include/textflag.h")); err != nil {
+	V("cp.Copy(%q, %q)", filepath.Join(tmp, "/go/bin/go"), filepath.Join(bin, "go"))
+	if err := cp.Copy(filepath.Join(tmp, "/go/bin/go"), filepath.Join(bin, "go")); err != nil {
 		return err
 	}
 	for _, n := range []string{
@@ -271,17 +259,20 @@ func main() {
 		log.Fatal(err)
 	}
 	bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
+	if err := os.MkdirAll(filepath.Join(d, bin), 0755); err != nil {
+		log.Fatal(err)
+	}
 
 	if err := getgo(d, version); err != nil {
 		log.Printf("getgo errored, %v, keep going", err)
-	}
-	if err := files(d, filepath.Join(d, bin)); err != nil {
-		log.Fatal(err)
 	}
 	if err := buildToolchain(d); err != nil {
 		log.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := files(d, filepath.Join(d, bin)); err != nil {
 		log.Fatal(err)
 	}
 	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {

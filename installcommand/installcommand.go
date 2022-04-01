@@ -135,7 +135,7 @@ func main() {
 		os.Args[1] = os.Args[1][2:]
 	}
 	form := parseCommandLine()
-	v("form is %q", form)
+	v("form is %v", form)
 
 	if form.lowPri {
 		if err := lowpriority(); err != nil {
@@ -167,7 +167,7 @@ func main() {
 	//if err := env.BuildDir(form.srcPath, destFile, golang.BuildOpts{ExtraArgs: []string{"-x",}}); err != nil {
 	//log.Fatalf("Couldn't compile %q: %v", form.cmdName, err)
 	//}
-	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-buildvcs=false", "-v", "-x", "-o", destFile)
+	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-v", "-x", "-o", destFile)
 	c.Dir = form.srcPath
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = append(c.Env, []string{"GOCACHE=/.cache", "CGO_ENABLED=0", "GOROOT=/go", "GOPATH=/src",}...)
