@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/u-root/u-root/pkg/cmdline"
-	"github.com/u-root/u-root/pkg/libinit"
 	"github.com/u-root/u-root/pkg/uflag"
 	"github.com/u-root/u-root/pkg/ulog"
 )
@@ -35,12 +34,12 @@ func osInitGo() *initCmds {
 	}
 
 	// Turn off job control when test mode is on.
-	ctty := libinit.WithTTYControl(false) // !*test)
+	ctty := WithTTYControl(false) // !*test)
 
 	// Install modules before exec-ing into user mode below
 	// the install all modules is just done wrong. Ignore for now.
 	// fix later.
-	// libinit.InstallAllModules()
+	// InstallAllModules()
 
 	// systemd is "special". If we are supposed to run systemd, we're
 	// going to exec, and if we're going to exec, we're done here.
@@ -67,7 +66,7 @@ func osInitGo() *initCmds {
 	if contents, err := os.ReadFile("/etc/uinit.flags"); err == nil {
 		args = append(args, uflag.FileToArgv(string(contents))...)
 	}
-	uinitArgs := libinit.WithArguments(args...)
+	uinitArgs := WithArguments(args...)
 
 	return &initCmds{
 		cmds: []*exec.Cmd{
@@ -76,15 +75,15 @@ func osInitGo() *initCmds {
 			// has a /init. The name inito means "original /init" There may
 			// be an inito if we are building on an existing initramfs. All
 			// initos need their own pid space.
-			libinit.Command("/linux_amd64/bin/cpud"),
-			libinit.Command("/inito", libinit.WithCloneFlags(syscall.CLONE_NEWPID), ctty),
+			Command("/linux_amd64/bin/cpud", WithArguments("-init", "-d")),
+			Command("/inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
 
-			libinit.Command("/bbin/uinit", ctty, uinitArgs),
-			libinit.Command("/bin/uinit", ctty, uinitArgs),
-			libinit.Command("/buildbin/uinit", ctty, uinitArgs),
+			Command("/bbin/uinit", ctty, uinitArgs),
+			Command("/bin/uinit", ctty, uinitArgs),
+			Command("/buildbin/uinit", ctty, uinitArgs),
 
-			libinit.Command("/bin/defaultsh", ctty),
-			libinit.Command("/bin/sh", ctty),
+			Command("/bin/defaultsh", ctty),
+			Command("/bin/sh", ctty),
 		},
 	}
 }

@@ -15,8 +15,6 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-
-	"github.com/u-root/u-root/pkg/libinit"
 )
 
 // initCmds has all the bits needed to continue
@@ -53,27 +51,27 @@ func main() {
 	// Before entering an interactive shell, decrease the loglevel because
 	// spamming non-critical logs onto the shell frustrates users. The logs
 	// are still accessible through kernel logs buffers (on most kernels).
-	if ! *verbose {
+	if !*verbose {
 		quiet()
 	}
 
-	libinit.SetEnv()
-	libinit.CreateRootfs()
-	libinit.NetInit()
+	SetEnv()
+	CreateRootfs()
+	NetInit()
 
 	// osInitGo wraps all the kernel-specific (i.e. non-portable) stuff.
 	// It returns an initCmds struct derived from kernel-specific information
 	// to be used in the rest of init.
 	ic := osInitGo()
 
-	cmdCount := libinit.RunCommands(debug, ic.cmds...)
+	cmdCount := RunCommands(debug, ic.cmds...)
 	if cmdCount == 0 {
 		log.Printf("No suitable executable found in %v", ic.cmds)
 	}
 
 	// We need to reap all children before exiting.
 	log.Printf("Waiting for orphaned children")
-	libinit.WaitOrphans()
+	WaitOrphans()
 	log.Printf("All commands exited")
 	log.Printf("Syncing filesystems")
 	if err := quiesce(); err != nil {

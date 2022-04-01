@@ -9,8 +9,6 @@ package main
 
 import (
 	"os/exec"
-
-	"github.com/u-root/u-root/pkg/libinit"
 )
 
 func quiet() {
@@ -18,7 +16,7 @@ func quiet() {
 
 func osInitGo() *initCmds {
 	// TOOD: get kernel command line.
-	uinitArgs := libinit.WithArguments()
+	uinitArgs := WithArguments()
 
 	// namespace setup will have done bind mounts into /bin, so name things only once.
 	return &initCmds{
@@ -28,9 +26,9 @@ func osInitGo() *initCmds {
 			// has a /init. The name inito means "original /init" There may
 			// be an inito if we are building on an existing initramfs. All
 			// initos need their own pid space.
-			libinit.Command("/inito"),
-			libinit.Command("/bin/uinit", uinitArgs),
-			libinit.Command("/bin/sh"),
+			Command("/inito"),
+			Command("/bin/uinit", uinitArgs),
+			Command("/bin/sh"),
 		},
 	}
 }
