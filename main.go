@@ -19,6 +19,7 @@ import (
 	"runtime"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/u-root/u-root/pkg/cp"
 	url "github.com/whilp/git-urls"
 )
 
@@ -117,7 +118,8 @@ func build(tmp, dir, bin string, extra ...string) error {
 	c.Args = append(c.Args, extra...)
 	c.Dir = filepath.Join(tmp, dir)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
-	//	c.Env = append(c.Env, "CGO_ENABLED=0")
+	c.Env = os.Environ()
+	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
 	if err := c.Run(); err != nil {
 		return err
 	}
@@ -142,7 +144,7 @@ func buildToolchain(tmp string) error {
 	}
 
 	toolDir := filepath.Join(tmp, "go/pkg/tool", filepath.Dir(bin))
-	for _, pkg := range []string{"compile", "link", "asm", "buildid"} {
+	for _, pkg := range []string{"compile", "link", "asm", "buildid", "pack"} {
 		c := filepath.Join(toolDir, pkg)
 		if e := build(tmp, filepath.Join("go/src/cmd", pkg), c); e != nil {
 			err = multierror.Append(err, e)
@@ -219,12 +221,19 @@ func tree(d string) error {
 	return err
 }
 
-func files(bin string) error {
+func files(tmp, bin string) error {
 	var err error
 	if err = os.MkdirAll(bin, 0755); err != nil {
 		return err
 	}
+	include := filepath.Join(tmp, "go/pkg/include")
+	if err = os.MkdirAll(include, 0755); err != nil {
+		return err
+	}
 
+	if err := cp.Copy(filepath.Join(tmp, "/go/src/runtime/textflag.h"), filepath.Join(tmp, "/go/pkg/include/textflag.h")); err != nil {
+		return err
+	}
 	for _, n := range []string{
 		"/src/github.com/u-root/cpu/cmds/cpud",
 		"/src/github.com/u-root/cpu/cmds/cpu",
@@ -236,6 +245,7 @@ func files(bin string) error {
 			err = multierror.Append(err, e)
 		}
 	}
+
 	return err
 }
 
@@ -261,12 +271,12 @@ func main() {
 		log.Fatal(err)
 	}
 	bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
-	if err := files(filepath.Join(d, bin)); err != nil {
-		log.Fatal(err)
-	}
 
 	if err := getgo(d, version); err != nil {
 		log.Printf("getgo errored, %v, keep going", err)
+	}
+	if err := files(d, filepath.Join(d, bin)); err != nil {
+		log.Fatal(err)
 	}
 	if err := buildToolchain(d); err != nil {
 		log.Fatal(err)
