@@ -300,6 +300,7 @@ func main() {
 	if err := build(pwd, "init", goBin); err != nil {
 		log.Fatalf("Building init: %v", err)
 	}
-	log.Printf("sudo strace -o shit -f unshare -m chroot %q /linux_amd64/bin/init", d)
+	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /linux_amd64/bin/init", d)
+	log.Printf("unshare -m chroot %q /linux_amd64/bin/init", d)
 	log.Printf("rsync -av --no-owner --no-group -I %q/ somewhere", d)
 }
