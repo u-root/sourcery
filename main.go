@@ -30,6 +30,7 @@ var (
 	kern    = runtime.GOOS
 	bin     string
 	testrun = true
+	dest    = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -207,10 +208,10 @@ func files(tmp, bin string) error {
 		return err
 	}
 
-	// There are certain common patterns we know are commands. 
+	// There are certain common patterns we know are commands.
 	// Just Do It.
 	var dirs []string
-	for _, g := range []string {
+	for _, g := range []string{
 		"/src/github.com/u-root/u-root/cmds/*/*",
 		"/src/github.com/u-root/cpu/cmds/*",
 		"/src/github.com/nsf/godit",
@@ -251,7 +252,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	d, err := os.MkdirTemp("", "sourcery")
+	d := *dest
+	if len(*dest) == 0 {
+		var err error
+		d, err = os.MkdirTemp("", "sourcery")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
 	defer fmt.Printf("Tree is %q\n", d)
 	if err != nil {
 		log.Fatal(err)
@@ -292,4 +301,5 @@ func main() {
 		log.Fatalf("Building init: %v", err)
 	}
 	log.Printf("sudo strace -o shit -f unshare -m chroot %q /linux_amd64/bin/init", d)
+	log.Printf("rsync -av --no-owner --no-group -I %q/ somewhere", d)
 }
