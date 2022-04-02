@@ -181,7 +181,7 @@ var (
 )
 
 func goBin() string {
-	return fmt.Sprintf("/go/bin/%s_%s:/go/bin:/go/pkg/tool/%s_%s", runtime.GOOS, runtime.GOARCH, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("/ubin:/%s_%s/bin:/go/bin/%s_%s:/go/bin:/go/pkg/tool/%s_%s", runtime.GOOS, runtime.GOARCH, runtime.GOOS, runtime.GOARCH, runtime.GOOS, runtime.GOARCH)
 }
 
 func create(namespace []creator, optional bool) {
