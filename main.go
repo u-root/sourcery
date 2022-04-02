@@ -206,13 +206,29 @@ func files(tmp, bin string) error {
 	if err := cp.Copy(filepath.Join(tmp, "/go/bin/go"), filepath.Join(bin, "go")); err != nil {
 		return err
 	}
-	for _, n := range []string{
-		"/src/github.com/u-root/cpu/cmds/cpud",
-		"/src/github.com/u-root/cpu/cmds/cpu",
-		"/src/github.com/u-root/u-root/cmds/core/elvish",
+
+	// There are certain common patterns we know are commands. 
+	// Just Do It.
+	var dirs []string
+	for _, g := range []string {
+		"/src/github.com/u-root/u-root/cmds/*/*",
+		"/src/github.com/u-root/cpu/cmds/*",
+		"/src/github.com/nsf/godit",
 	} {
+		m, err := filepath.Glob(filepath.Join(tmp, g))
+		if err != nil {
+			V("%q: %v", g, err)
+			continue
+		}
+		dirs = append(dirs, m...)
+	}
+	for _, n := range dirs {
+		r, e := filepath.Rel(tmp, n)
+		if e != nil {
+			err = multierror.Append(err, e)
+		}
 		f := filepath.Join(bin, filepath.Base(n))
-		dat := []byte("#!/linux_amd64/bin/installcommand #!" + n + "\n")
+		dat := []byte("#!/linux_amd64/bin/installcommand #!/" + r + "\n")
 		V("Write %q with %q", f, dat)
 		if e := ioutil.WriteFile(f, dat, 0755); e != nil {
 			err = multierror.Append(err, e)
@@ -257,13 +273,13 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
-	if err := files(d, filepath.Join(d, bin)); err != nil {
-		log.Fatal(err)
-	}
 	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
 	}
 
+	if err := files(d, filepath.Join(d, bin)); err != nil {
+		log.Fatal(err)
+	}
 	goBin := filepath.Join(d, bin, "installcommand")
 	V("Build the installcommand in %q", goBin)
 	if err := build(pwd, "installcommand", goBin); err != nil {

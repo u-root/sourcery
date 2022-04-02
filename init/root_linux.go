@@ -108,6 +108,7 @@ var (
 	}
 	namespace = []creator{
 		dir{Name: "/buildbin", Mode: 0o777},
+		dir{Name: "/.cache", Mode: 0o777},
 		dir{Name: "/ubin", Mode: 0o777},
 		dir{Name: "/tmp", Mode: 0o777},
 		dir{Name: "/env", Mode: 0o777},
@@ -122,8 +123,9 @@ var (
 		dir{Name: "/proc", Mode: 0o555},
 		mount{Source: "proc", Target: "/proc", FSType: "proc"},
 		mount{Source: "tmpfs", Target: "/tmp", FSType: "tmpfs"},
-		// Mount tmpfs over /ubin, so we don't fill the vfat with fluff.
-		//mount{Source: "tmpfs", Target: "/ubin", FSType: "tmpfs"},
+		// Mount tmpfs over /.cache and /ubin, so we don't fill the vfat with fluff.
+		mount{Source: "tmpfs", Target: "/ubin", FSType: "tmpfs"},
+		mount{Source: "tmpfs", Target: "/.cache", FSType: "tmpfs"},
 
 		dev{Name: "/dev/tty", Mode: syscall.S_IFCHR | 0o666, Dev: 0x0500},
 		dev{Name: "/dev/urandom", Mode: syscall.S_IFCHR | 0o444, Dev: 0x0109},
