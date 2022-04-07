@@ -24,13 +24,14 @@ import (
 )
 
 var (
-	version = "go1.17.7"
-	V       = log.Printf
-	arch    = runtime.GOARCH
-	kern    = runtime.GOOS
-	bin     string
-	testrun = true
-	dest    = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
+	version     = "go1.17.7"
+	V           = log.Printf
+	arch        = runtime.GOARCH
+	kern        = runtime.GOOS
+	bin         string
+	testrun     = true
+	dest        = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
+	development = flag.Bool("D", true, "Use development (i.e.) pwd version of installcommand/init, not github version")
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -213,6 +214,7 @@ func files(tmp, bin string) error {
 	var dirs []string
 	for _, g := range []string{
 		"/src/github.com/u-root/u-root/cmds/*/*",
+		"/src/github.com/u-root/NiChrome/cmds/*",
 		"/src/github.com/u-root/cpu/cmds/*",
 		"/src/github.com/nsf/godit",
 	} {
@@ -289,17 +291,20 @@ func main() {
 	if err := files(d, filepath.Join(d, bin)); err != nil {
 		log.Fatal(err)
 	}
-	goBin := filepath.Join(d, bin, "installcommand")
-	V("Build the installcommand in %q", goBin)
-	if err := build(pwd, "installcommand", goBin); err != nil {
-		log.Fatalf("Building installcommand: %v", err)
+
+	baseToolPath := filepath.Join(d, bin)
+	if *development {
+		baseToolPath = pwd
+	}
+	V("Build tools from %q", baseToolPath)
+	for _, tool := range []string{"installcommand", "init"} {
+		goBin := filepath.Join(d, bin, tool)
+		V("Build %q in %q, install to %q", tool, baseToolPath, goBin)
+		if err := build(baseToolPath, tool, goBin); err != nil {
+			log.Fatalf("Building %q -> %q: %v", goBin, tool, err)
+		}
 	}
 
-	goBin = filepath.Join(d, bin, "init")
-	V("Build the init in %q", goBin)
-	if err := build(pwd, "init", goBin); err != nil {
-		log.Fatalf("Building init: %v", err)
-	}
 	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /linux_amd64/bin/init", d)
 	log.Printf("unshare -m chroot %q /linux_amd64/bin/init", d)
 	log.Printf("rsync -av --no-owner --no-group -I %q/ somewhere", d)
