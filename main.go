@@ -305,7 +305,7 @@ func main() {
 		}
 	}
 
-	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /linux_amd64/bin/init", d)
-	log.Printf("unshare -m chroot %q /linux_amd64/bin/init", d)
+	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
+	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
 	log.Printf("rsync -av --no-owner --no-group -I %q/ somewhere", d)
 }
