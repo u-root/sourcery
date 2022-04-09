@@ -211,10 +211,11 @@ func SetEnv() {
 	}
 
 	// Not all these paths may be populated or even exist but OTOH they might.
-	path := "/ubin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin:/usr/local/sbin:/buildbin:/bbin"
+	path := "/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin:/usr/local/sbin:/buildbin:/bbin"
 
 	env["PATH"] = fmt.Sprintf("%v:%v", goBin(), path)
 	for k, v := range env {
+		log.Printf("SetEnv: %q=%q", k, v)
 		os.Setenv(k, v)
 	}
 }
