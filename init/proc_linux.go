@@ -70,6 +70,13 @@ func linuxDefault(c *exec.Cmd) {
 func RunCommands(debug func(string, ...interface{}), commands ...*exec.Cmd) int {
 	var cmdCount int
 	for _, cmd := range commands {
+		debug("Path is %q", cmd.Path)
+		p, err := exec.LookPath(cmd.Path)
+		if err != nil {
+			debug("%v", err)
+			continue
+		}
+		cmd.Path = p
 		if _, err := os.Stat(cmd.Path); os.IsNotExist(err) {
 			debug("%v", err)
 			continue

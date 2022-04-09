@@ -7,8 +7,6 @@ package main
 import (
 	"os"
 	"os/exec"
-
-	"github.com/u-root/u-root/pkg/upath"
 )
 
 var osDefault = func(*exec.Cmd) {}
@@ -27,7 +25,6 @@ func WithArguments(arg ...string) CommandModifier {
 
 // Command constructs an *exec.Cmd object.
 func Command(bin string, m ...CommandModifier) *exec.Cmd {
-	bin = upath.UrootPath(bin)
 	cmd := exec.Command(bin)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	osDefault(cmd)
