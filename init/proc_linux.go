@@ -6,7 +6,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"os/exec"
 	"syscall"
 )
@@ -77,11 +76,6 @@ func RunCommands(debug func(string, ...interface{}), commands ...*exec.Cmd) int 
 			continue
 		}
 		cmd.Path = p
-		if _, err := os.Stat(cmd.Path); os.IsNotExist(err) {
-			debug("%v", err)
-			continue
-		}
-
 		cmdCount++
 		debug("Trying to run %v", cmd)
 		if err := cmd.Start(); err != nil {
