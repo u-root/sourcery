@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"runtime"
 )
 
 // initCmds has all the bits needed to continue
@@ -27,6 +28,7 @@ var (
 	verbose = flag.Bool("v", false, "Enable libinit debugging (includes showing commands that are run)")
 	test    = flag.Bool("test", true, "Test mode: don't try to set control tty")
 	debug   = log.Printf // func(string, ...interface{}) {}
+	bin     = fmt.Sprintf("/%s_%s/bin", runtime.GOOS, runtime.GOARCH)
 )
 
 func main() {

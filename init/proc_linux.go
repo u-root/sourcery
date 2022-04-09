@@ -6,7 +6,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"os/exec"
 	"syscall"
 )
@@ -70,11 +69,13 @@ func linuxDefault(c *exec.Cmd) {
 func RunCommands(debug func(string, ...interface{}), commands ...*exec.Cmd) int {
 	var cmdCount int
 	for _, cmd := range commands {
-		if _, err := os.Stat(cmd.Path); os.IsNotExist(err) {
+		debug("Path is %q", cmd.Path)
+		p, err := exec.LookPath(cmd.Path)
+		if err != nil {
 			debug("%v", err)
 			continue
 		}
-
+		cmd.Path = p
 		cmdCount++
 		debug("Trying to run %v", cmd)
 		if err := cmd.Start(); err != nil {
