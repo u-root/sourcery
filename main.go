@@ -194,9 +194,9 @@ func tree(d string) error {
 	return err
 }
 
-func files(tmp, bin string) error {
+func files(tmp, binpath, destdir string) error {
 	var err error
-	if err = os.MkdirAll(bin, 0755); err != nil {
+	if err = os.MkdirAll(destdir, 0755); err != nil {
 		return err
 	}
 	include := filepath.Join(tmp, "go/pkg/include")
@@ -204,8 +204,8 @@ func files(tmp, bin string) error {
 		return err
 	}
 
-	V("cp.Copy(%q, %q)", filepath.Join(tmp, "/go/bin/go"), filepath.Join(bin, "go"))
-	if err := cp.Copy(filepath.Join(tmp, "/go/bin/go"), filepath.Join(bin, "go")); err != nil {
+	V("cp.Copy(%q, %q)", filepath.Join(tmp, "/go/bin/go"), filepath.Join(destdir, "go"))
+	if err := cp.Copy(filepath.Join(tmp, "/go/bin/go"), filepath.Join(destdir, "go")); err != nil {
 		return err
 	}
 
@@ -230,8 +230,8 @@ func files(tmp, bin string) error {
 		if e != nil {
 			err = multierror.Append(err, e)
 		}
-		f := filepath.Join(bin, filepath.Base(n))
-		dat := []byte("#!/linux_amd64/bin/installcommand #!/" + r + "\n")
+		f := filepath.Join(destdir, filepath.Base(n))
+		dat := []byte("#!/" + binpath + "/installcommand #!/" + r + "\n")
 		V("Write %q with %q", f, dat)
 		if e := ioutil.WriteFile(f, dat, 0755); e != nil {
 			err = multierror.Append(err, e)
@@ -288,7 +288,7 @@ func main() {
 		log.Fatalf("Getting packages: %v", err)
 	}
 
-	if err := files(d, filepath.Join(d, bin)); err != nil {
+	if err := files(d, bin, filepath.Join(d, bin)); err != nil {
 		log.Fatal(err)
 	}
 
