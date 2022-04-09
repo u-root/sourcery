@@ -75,15 +75,11 @@ func osInitGo() *initCmds {
 			// has a /init. The name inito means "original /init" There may
 			// be an inito if we are building on an existing initramfs. All
 			// initos need their own pid space.
-			Command("/linux_amd64/bin/elvish"),
-			Command("/inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
-
-			Command("/bbin/uinit", ctty, uinitArgs),
-			Command("/bin/uinit", ctty, uinitArgs),
-			Command("/buildbin/uinit", ctty, uinitArgs),
-
-			Command("/bin/defaultsh", ctty),
-			Command("/bin/sh", ctty),
+			Command("elvish"),
+			Command("inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
+			Command("uinit", ctty, uinitArgs),
+			Command("defaultsh", ctty),
+			Command("sh", ctty),
 		},
 	}
 }
