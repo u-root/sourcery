@@ -19,7 +19,6 @@ import (
 	"runtime"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/u-root/u-root/pkg/cp"
 	url "github.com/whilp/git-urls"
 )
 
@@ -103,10 +102,12 @@ func getgo(d, v string) error {
 	return nil
 }
 
-func build(tmp, dir, bin string, extra ...string) error {
-	c := exec.Command("go", "build", "-o", bin)
+// build builds the code found in filepath.Join(tmp, dir)
+// into bin.
+func build(tmp, sourcePath, dir, bin string, extra ...string) error {
+	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "build", "-o", bin)
 	c.Args = append(c.Args, extra...)
-	c.Dir = filepath.Join(tmp, dir)
+	c.Dir = filepath.Join(sourcePath, dir)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = os.Environ()
 	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
@@ -125,6 +126,18 @@ func buildToolchain(tmp string) error {
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = os.Environ()
 	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
+	if err := c.Run(); err != nil {
+		return err
+	}
+	// Need to also build the go command itself.
+	c = exec.Command("go", "build", "-o", filepath.Join(tmp, bin, "go"))
+	c.Dir = filepath.Join(tmp, "go/src/cmd/go")
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = os.Environ()
+	c.Env = append(c.Env, "GOARCH="+arch, "GOOS="+kern, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
+	if a, ok := os.LookupEnv("GOARM"); ok {
+		c.Env = append(c.Env, a)
+	}
 	if err := c.Run(); err != nil {
 		return err
 	}
@@ -201,11 +214,6 @@ func files(tmp, binpath, destdir string) error {
 	}
 	include := filepath.Join(tmp, "go/pkg/include")
 	if err = os.MkdirAll(include, 0755); err != nil {
-		return err
-	}
-
-	V("cp.Copy(%q, %q)", filepath.Join(tmp, "/go/bin/go"), filepath.Join(destdir, "go"))
-	if err := cp.Copy(filepath.Join(tmp, "/go/bin/go"), filepath.Join(destdir, "go")); err != nil {
 		return err
 	}
 
@@ -300,7 +308,7 @@ func main() {
 	for _, tool := range []string{"installcommand", "init"} {
 		goBin := filepath.Join(d, bin, tool)
 		V("Build %q in %q, install to %q", tool, baseToolPath, goBin)
-		if err := build(baseToolPath, tool, goBin); err != nil {
+		if err := build(d, baseToolPath, tool, goBin); err != nil {
 			log.Fatalf("Building %q -> %q: %v", goBin, tool, err)
 		}
 	}
