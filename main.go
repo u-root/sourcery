@@ -34,7 +34,7 @@ var (
 )
 
 func clone(tmp, version, repo, dir, base string) error {
-	V("clone: %q, %q, %q", tmp, version, dir, base)
+	V("clone: %q, %q, %q, %q", tmp, version, dir, base)
 	dest := filepath.Join(tmp, dir)
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return err
@@ -54,9 +54,13 @@ func clone(tmp, version, repo, dir, base string) error {
 }
 
 func tidy(tmp, dir, base string) error {
-	c := exec.Command("go", "mod", "tidy")
+	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "mod", "tidy")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = append(c.Env, "GOPATH="+tmp)
+	c.Env = append(c.Env, "GOARCH="+arch, "GOOS="+kern, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
+	if a, ok := os.LookupEnv("GOARM"); ok {
+		c.Env = append(c.Env, a)
+	}
 	c.Dir = filepath.Join(tmp, dir, base)
 	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
 	if err := c.Run(); err != nil {
@@ -72,7 +76,7 @@ func modinit(tmp, host, dir, base string) error {
 		V("modinit: it has go.mod")
 		return nil
 	}
-	c := exec.Command("go", "mod", "init", filepath.Join(host, dir, base))
+	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "mod", "init", filepath.Join(host, dir, base))
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = append(c.Env, "GOPATH="+tmp)
 	c.Dir = path
@@ -130,7 +134,7 @@ func buildToolchain(tmp string) error {
 		return err
 	}
 	// Need to also build the go command itself.
-	c = exec.Command("go", "build", "-o", filepath.Join(tmp, bin, "go"))
+	c = exec.Command(filepath.Join(tmp, "go/bin/go"), "build", "-o", filepath.Join(tmp, bin, "go"))
 	c.Dir = filepath.Join(tmp, "go/src/cmd/go")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = os.Environ()
@@ -138,6 +142,7 @@ func buildToolchain(tmp string) error {
 	if a, ok := os.LookupEnv("GOARM"); ok {
 		c.Env = append(c.Env, a)
 	}
+	V("Build go toolchain, Args %v, Env %v", c.Args, c.Env)
 	if err := c.Run(); err != nil {
 		return err
 	}
@@ -315,5 +320,5 @@ func main() {
 
 	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
 	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
-	log.Printf("rsync -av --no-owner --no-group -I %q/ somewhere", d)
+	log.Printf("rsync -avz --no-owner --no-group -I %q somewhere", d)
 }

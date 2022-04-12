@@ -165,10 +165,12 @@ func main() {
 	}
 
 	v("Build %q install into %q", form.srcPath, destFile)
-	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-buildvcs=false", "-v", "-x", "-o", destFile)
+	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-v", "-x", "-o", destFile)
 	c.Dir = form.srcPath
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = os.Environ()
 	c.Env = append(c.Env, []string{"GOCACHE=/.cache", "CGO_ENABLED=0", "GOROOT=/go", "GOPATH=/src"}...)
+	v("Args %q env %q", c.Args, c.Env)
 	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
