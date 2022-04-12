@@ -165,7 +165,7 @@ func main() {
 	}
 
 	v("Build %q install into %q", form.srcPath, destFile)
-	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-v", "-x", "-o", destFile)
+	c := exec.Command(fmt.Sprintf("/%s_%s/bin/go", runtime.GOOS, runtime.GOARCH), "build", "-mod=readonly", "-v", "-x", "-o", destFile)
 	c.Dir = form.srcPath
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = os.Environ()
