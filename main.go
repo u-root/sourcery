@@ -10,6 +10,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"runtime"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/u-root/u-root/pkg/cpio"
 	url "github.com/whilp/git-urls"
 )
 
@@ -31,6 +33,7 @@ var (
 	testrun     = true
 	dest        = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
 	development = flag.Bool("D", true, "Use development (i.e.) pwd version of installcommand/init, not github version")
+	outCPIO     = flag.String("cpio", "", "output cpio")
 )
 
 func clone(tmp, version, repo, dir, base string) error {
@@ -254,6 +257,47 @@ func files(tmp, binpath, destdir string) error {
 	return err
 }
 
+func ramfs(from, out string, filter ...string) error {
+	to, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	log.Printf("Archiving to %v", out)
+	archiver, err := cpio.Format("newc")
+	if err != nil {
+		log.Fatalf("Format %q not supported: %v", "newc", err)
+	}
+
+	rw := archiver.Writer(to)
+	cr := cpio.NewRecorder()
+
+	if err := filepath.WalkDir(from, func(name string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		n, err := filepath.Rel(from, name)
+		if err != nil {
+			return err
+		}
+		V("Archive %q", name)
+		rec, err := cr.GetRecord(name)
+		rec.Name = n
+		if err != nil {
+			return fmt.Errorf("Getting record of %q failed: %v", name, err)
+		}
+		if err := rw.WriteRecord(rec); err != nil {
+			log.Fatalf("Writing record %q failed: %v", name, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := cpio.WriteTrailer(rw); err != nil {
+		return fmt.Errorf("Error writing trailer record: %v", err)
+	}
+	return nil
+}
+
 func main() {
 	flag.Parse()
 	V("Building for %v_%v", arch, kern)
@@ -318,6 +362,11 @@ func main() {
 		}
 	}
 
+	if *outCPIO != "" {
+		if err := ramfs(d, *outCPIO); err != nil {
+			log.Printf("ramfs: %v", err)
+		}
+	}
 	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
 	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
 	log.Printf("rsync -avz --no-owner --no-group -I %q somewhere", d)
