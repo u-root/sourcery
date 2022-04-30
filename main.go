@@ -36,6 +36,12 @@ var (
 	outCPIO     = flag.String("cpio", "", "output cpio")
 )
 
+// Little note here: you'll see we use go/bin/go a lot, instead of kern_arch/bin/go.
+// Lessons learned the hard way: go/bin/go seems to do a better job of finding
+// GOROOT and other things when run from go/bin. We have not confirmed this from code,
+// but from running it: best to run go/bin/go when doing this build.
+// Will it work for replication? Remains to be seen.
+
 func clone(tmp, version, repo, dir, base string) error {
 	V("clone: %q, %q, %q, %q", tmp, version, dir, base)
 	dest := filepath.Join(tmp, dir)

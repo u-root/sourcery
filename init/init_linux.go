@@ -66,7 +66,7 @@ func osInitGo() *initCmds {
 	if contents, err := os.ReadFile("/etc/uinit.flags"); err == nil {
 		args = append(args, uflag.FileToArgv(string(contents))...)
 	}
-	uinitArgs := WithArguments(args...)
+	//uinitArgs := WithArguments(args...)
 
 	return &initCmds{
 		cmds: []*exec.Cmd{
@@ -76,8 +76,8 @@ func osInitGo() *initCmds {
 			// be an inito if we are building on an existing initramfs. All
 			// initos need their own pid space.
 			Command("elvish"),
-			Command("inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
-			Command("uinit", ctty, uinitArgs),
+			//Command("inito", WithCloneFlags(syscall.CLONE_NEWPID), ctty),
+			//Command("uinit", ctty, uinitArgs),
 			Command("defaultsh", ctty),
 			Command("sh", ctty),
 		},
