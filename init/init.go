@@ -16,6 +16,7 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 // initCmds has all the bits needed to continue
@@ -25,16 +26,17 @@ type initCmds struct {
 }
 
 var (
-	verbose = flag.Bool("v", false, "Enable libinit debugging (includes showing commands that are run)")
+	verbose = flag.Bool("v", true, "Enable libinit debugging (includes showing commands that are run)")
 	test    = flag.Bool("test", true, "Test mode: don't try to set control tty")
 	debug   = log.Printf // func(string, ...interface{}) {}
 	bin     = fmt.Sprintf("/%s_%s/bin", runtime.GOOS, runtime.GOARCH)
 )
 
 func main() {
-	flag.Parse()
+	for i := 0; i < 10; i++ {
+		log.Printf("hi\n")
 
-	fmt.Printf(` _________________
+		fmt.Printf(` _________________
 < u-root sourcery >
  -----------------
         \   ^__^
@@ -43,6 +45,9 @@ func main() {
                 ||----w |
                 ||     ||
 `)
+	}
+
+	flag.Parse()
 
 	log.SetPrefix("init: ")
 
@@ -57,15 +62,22 @@ func main() {
 		quiet()
 	}
 
+	debug("SetEnv")
 	SetEnv()
+	debug("CreateRootfs")
 	CreateRootfs()
-	NetInit()
+	if false {
+		debug("NetInit")
+		NetInit()
+	}
 
-	// osInitGo wraps all the kernel-specific (i.e. non-portable) stuff.
-	// It returns an initCmds struct derived from kernel-specific information
-	// to be used in the rest of init.
-	ic := osInitGo()
+		// osInitGo wraps all the kernel-specific (i.e. non-portable) stuff.
+		// It returns an initCmds struct derived from kernel-specific information
+		// to be used in the rest of init.
+		debug("osInitGo")
+		ic := osInitGo()
 
+	debug("RunCommands")
 	cmdCount := RunCommands(debug, ic.cmds...)
 	if cmdCount == 0 {
 		log.Printf("No suitable executable found in %v", ic.cmds)
@@ -79,5 +91,7 @@ func main() {
 	if err := quiesce(); err != nil {
 		log.Printf("%v", err)
 	}
+	log.Printf("Sleep 3000")
+	time.Sleep(3000 * time.Second)
 	log.Printf("Exiting...")
 }

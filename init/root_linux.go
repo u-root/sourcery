@@ -100,11 +100,12 @@ func (c cpdir) String() string {
 
 var (
 	// These have to be created / mounted first, so that the logging works correctly.
+	// We're going to let the kernel do it.
 	preNamespace = []creator{
-		dir{Name: "/dev", Mode: 0o777},
+		// dir{Name: "/dev", Mode: 0o777},
 
 		// Kernel must be compiled with CONFIG_DEVTMPFS.
-		mount{Source: "devtmpfs", Target: "/dev", FSType: "devtmpfs"},
+		// mount{Source: "devtmpfs", Target: "/dev", FSType: "devtmpfs"},
 	}
 	namespace = []creator{
 		dir{Name: "/buildbin", Mode: 0o777},
@@ -226,6 +227,7 @@ func CreateRootfs() {
 	create(preNamespace, false)
 	ulog.KernelLog.Reinit()
 
+	return
 	create(namespace, false)
 
 	// systemd gets upset when it discovers something has already setup cgroups

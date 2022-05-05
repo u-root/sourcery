@@ -17,7 +17,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/u-root/u-root/pkg/cpio"
@@ -34,6 +36,7 @@ var (
 	dest        = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
 	development = flag.Bool("D", true, "Use development (i.e.) pwd version of installcommand/init, not github version")
 	outCPIO     = flag.String("cpio", "", "output cpio")
+	cpioFilter  = flag.String("filter", "", "filter files/directories/names for cpio")
 )
 
 // Little note here: you'll see we use go/bin/go a lot, instead of kern_arch/bin/go.
@@ -263,6 +266,30 @@ func files(tmp, binpath, destdir string) error {
 	return err
 }
 
+var root = []cpio.Record{
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "bin"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "dev"}},
+	{Info: cpio.Info{Mode: 0x2180, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x5, Rminor: 0x1, Name: "dev/console"}},
+	{Info: cpio.Info{Mode: 0x21b6, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x1, Rminor: 0x3, Name: "dev/null"}},
+	{Info: cpio.Info{Mode: 0x21a0, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x1, Rminor: 0x4, Name: "dev/port"}},
+	{Info: cpio.Info{Mode: 0x21b6, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x5, Rminor: 0x0, Name: "dev/tty"}},
+	{Info: cpio.Info{Mode: 0x21b6, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x1, Rminor: 0x9, Name: "dev/urandom"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "env"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "etc"}},
+	{Info: cpio.Info{Mode: 0x81a4, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x7f, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "etc/localtime"}},
+	{Info: cpio.Info{Mode: 0x81a4, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x13, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "etc/resolv.conf"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "lib64"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "proc"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "sys"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "tcz"}},
+	{Info: cpio.Info{Mode: 0x41ff, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "tmp"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "ubin"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "usr"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "usr/lib"}},
+	{Info: cpio.Info{Mode: 0x41ed, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "var"}},
+	{Info: cpio.Info{Mode: 0x41ff, UID: 0x0, GID: 0x0, NLink: 0x0, MTime: 0x0, FileSize: 0x0, Dev: 0x0, Major: 0x0, Minor: 0x0, Rmajor: 0x0, Rminor: 0x0, Name: "var/log"}},
+}
+
 func ramfs(from, out string, filter ...string) error {
 	to, err := os.Create(out)
 	if err != nil {
@@ -277,13 +304,39 @@ func ramfs(from, out string, filter ...string) error {
 	rw := archiver.Writer(to)
 	cr := cpio.NewRecorder()
 
-	if err := filepath.WalkDir(from, func(name string, _ fs.DirEntry, err error) error {
+	if err := cpio.WriteRecords(rw, root); err != nil {
+		log.Fatal(err)
+	}
+
+	var f = func(n string) bool { return false }
+	if len(filter) > 0 {
+		re := regexp.MustCompile(strings.Join(filter, "|"))
+		f = func(n string) bool {
+			return re.MatchString(n)
+		}
+	}
+
+	for _, r := range root {
+		V("Write %v", r)
+		if err := rw.WriteRecord(r); err != nil {
+			log.Fatalf("Writing record %v failed: %v", r, err)
+		}
+	}
+
+	if err := filepath.WalkDir(from, func(name string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		n, err := filepath.Rel(from, name)
 		if err != nil {
 			return err
+		}
+		if f(name) {
+			V("SKIP %q", name)
+			if de.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		V("Archive %q", name)
 		rec, err := cr.GetRecord(name)
@@ -369,7 +422,7 @@ func main() {
 	}
 
 	if *outCPIO != "" {
-		if err := ramfs(d, *outCPIO); err != nil {
+		if err := ramfs(d, *outCPIO, "\\.git", "testdata", "go/pkg/[^/][^/]*_[^/][^/]*/"); err != nil {
 			log.Printf("ramfs: %v", err)
 		}
 	}
