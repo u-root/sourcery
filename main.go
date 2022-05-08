@@ -66,14 +66,15 @@ func clone(tmp, version, repo, dir, base string) error {
 }
 
 func tidy(tmp, dir, base string) error {
-	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "mod", "tidy")
+	V("tidy(%q, %q, %q", tmp, dir, base)
+	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "mod", "download", "-x")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = append(c.Env, "GOPATH="+tmp)
 	c.Env = append(c.Env, "GOARCH="+arch, "GOOS="+kern, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
 	if a, ok := os.LookupEnv("GOARM"); ok {
 		c.Env = append(c.Env, a)
 	}
-	c.Dir = filepath.Join(tmp, dir, base)
+	c.Dir = filepath.Join(tmp, "src", dir, base)
 	V("Run %v(%q, %q in %q)", c, c.Args, c.Env, c.Dir)
 	if err := c.Run(); err != nil {
 		return err
@@ -82,7 +83,8 @@ func tidy(tmp, dir, base string) error {
 }
 
 func modinit(tmp, host, dir, base string) error {
-	path := filepath.Join(tmp, dir, base)
+	V("modinit(%q, %q, %q, %q", tmp, host, dir, base)
+	path := filepath.Join(tmp, "src", dir, base)
 	V("modinit: check %q for go.mod", path)
 	if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
 		V("modinit: it has go.mod")
@@ -177,32 +179,29 @@ func goName(p string) (string, string, string, error) {
 }
 
 func get(target string, args ...string) error {
-	var err error
+	tmp := filepath.Join(target, "..")
 	for _, d := range args {
 		V("Get %q", d)
 		host, dir, base, err := goName(d)
 		if err != nil {
 			V("URL %q: %v", d, err)
-			err = multierror.Append(err, fmt.Errorf("%q: %v", d, err))
+			return fmt.Errorf("%q: %v", d, err)
 			continue
 		}
 		dir = filepath.Join(host, dir)
 		V("goName for %q: %q, %q, %q", d, host, dir, base)
-		if e := clone(target, "", d, dir, base); err != nil {
-			err = multierror.Append(err, e)
-			continue
+		if err := clone(target, "", d, dir, base); err != nil {
+			return fmt.Errorf("clone: %v", err)
 		}
 
-		if e := modinit(target, host, dir, base); e != nil {
-			err = multierror.Append(err, e)
-			continue
+		if err := modinit(tmp, host, dir, base); err != nil {
+			return fmt.Errorf("modinit: %v", err)
 		}
-		if e := tidy(target, dir, base); e != nil {
-			err = multierror.Append(err, e)
-			continue
+		if err := tidy(tmp, dir, base); err != nil {
+			return fmt.Errorf("tidy: %v", err)
 		}
 	}
-	return err
+	return nil
 }
 
 func init() {
