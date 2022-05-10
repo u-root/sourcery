@@ -19,6 +19,7 @@ COPY tmp /tmp
 
 # Export necessary port
 EXPOSE 23
+EXPOSE 8000-8020
 
 # Command to run
 ENTRYPOINT ["/elvish"]

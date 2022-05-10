@@ -4,7 +4,7 @@ all: cat date cpud cpu elvish ls sourcery Dockerfile
 
 sourcery:
 	sudo rm -rf /tmp/docker docker
-	(cd .. && ./sourcery -d /tmp/docker git@github.com:u-root/u-root)
+	(cd .. && ./sourcery -d /tmp/docker git@github.com:u-root/u-root git@github.com:u-root/cpu git@github.com:u-root/NiChrome)
 	rsync -av /tmp/docker/ .
 
 cpud:
@@ -31,7 +31,7 @@ rundocker:
 	stat $(KEY)
 	echo on start, run /linux_amd64/bin/init
 	echo To exit, kill the init process.
-	docker run --mount type=bind,source=$(KEY).pub,target=/key.pub --mount type=bind,source=$(KEY),target=/key --name sourcery_test --privileged=true -t -i -p 23:23 $(IMAGE)
+	docker run --mount type=bind,source=$(KEY).pub,target=/key.pub --mount type=bind,source=$(KEY),target=/key --name sourcery_test --privileged=true -t -i -p 8000-8020:8000-8020 -p 23:23 $(IMAGE)
 
 run:
 	@echo ===================================================
