@@ -424,6 +424,7 @@ func main() {
 		if err := ramfs(d, *outCPIO, "\\.git", "testdata", "go/pkg/[^/][^/]*_[^/][^/]*/"); err != nil {
 			log.Printf("ramfs: %v", err)
 		}
+		log.Printf("qemu-system-x86_64 -kernel bzImage -initrd %q -nographic -serial mon:stdio -m 16G -append rdinit=/linux_amd64/bin/init", *outCPIO)
 	}
 	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
 	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
