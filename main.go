@@ -17,7 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/u-root/u-root/pkg/cpio"
@@ -27,8 +27,8 @@ import (
 var (
 	version     = "go1.17.7"
 	V           = log.Printf
-	arch        = runtime.GOARCH
-	kern        = runtime.GOOS
+	archList    = flag.String("arches", "amd64", "comma-separated list of GOARCH")
+	kernList    = flag.String("kernels", "linux", "comma-seperate list of GOOS")
 	bin         string
 	testrun     = true
 	dest        = flag.String("d", "", "Destination directory -- default is os.MkdirTemp")
@@ -62,7 +62,7 @@ func clone(tmp, version, repo, dir, base string) error {
 	return nil
 }
 
-func tidy(tmp, dir, base string) error {
+func tidy(tmp, dir, base, kern, arch string) error {
 	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "mod", "tidy")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = append(c.Env, "GOPATH="+tmp)
@@ -78,7 +78,7 @@ func tidy(tmp, dir, base string) error {
 	return nil
 }
 
-func modinit(tmp, host, dir, base string) error {
+func modinit(tmp, host, dir, base, kern, arch string) error {
 	path := filepath.Join(tmp, dir, base)
 	V("modinit: check %q for go.mod", path)
 	if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
@@ -117,13 +117,13 @@ func getgo(d, v string) error {
 
 // build builds the code found in filepath.Join(tmp, dir)
 // into bin.
-func build(tmp, sourcePath, dir, bin string, extra ...string) error {
+func build(tmp, sourcePath, dir, bin, kern, arch string, extra ...string) error {
 	c := exec.Command(filepath.Join(tmp, "go/bin/go"), "build", "-o", bin)
 	c.Args = append(c.Args, extra...)
 	c.Dir = filepath.Join(sourcePath, dir)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	c.Env = os.Environ()
-	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0")
+	c.Env = append(c.Env, "GOROOT_FINAL=/go", "CGO_ENABLED=0", "GOOS="+kern, "GOARCH="+arch)
 	if err := c.Run(); err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func build(tmp, sourcePath, dir, bin string, extra ...string) error {
 // buildToolchain builds the needed Go toolchain binaries: go, compile, link,
 // asm. We can no longer do this without the script. Damn.
 // TODO: figure out what files we can remove.
-func buildToolchain(tmp string) error {
+func buildToolchain(tmp, kern, arch string) error {
 	c := exec.Command("bash", "make.bash")
 	c.Dir = filepath.Join(tmp, "go/src")
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
@@ -173,7 +173,7 @@ func goName(p string) (string, string, string, error) {
 	return host, filepath.Dir(u.Path), filepath.Base(u.Path), nil
 }
 
-func get(target string, args ...string) error {
+func get(target string, kernels, archs []string, args ...string) error {
 	var err error
 	for _, d := range args {
 		V("Get %q", d)
@@ -189,26 +189,20 @@ func get(target string, args ...string) error {
 			err = multierror.Append(err, e)
 			continue
 		}
-
-		if e := modinit(target, host, dir, base); e != nil {
-			err = multierror.Append(err, e)
-			continue
-		}
-		if e := tidy(target, dir, base); e != nil {
-			err = multierror.Append(err, e)
-			continue
+		for _, kern := range kernels {
+			for _, arch := range archs {
+				if e := modinit(target, host, dir, base, kern, arch); e != nil {
+					err = multierror.Append(err, e)
+					continue
+				}
+				if e := tidy(target, dir, base, kern, arch); e != nil {
+					err = multierror.Append(err, e)
+					continue
+				}
+			}
 		}
 	}
 	return err
-}
-
-func init() {
-	if a, ok := os.LookupEnv("GOARCH"); ok {
-		arch = a
-	}
-	if a, ok := os.LookupEnv("GOOS"); ok {
-		kern = a
-	}
 }
 
 func tree(d string) error {
@@ -306,7 +300,10 @@ func ramfs(from, out string, filter ...string) error {
 
 func main() {
 	flag.Parse()
-	V("Building for %v_%v", arch, kern)
+
+	kernels := strings.Split(*kernList, ",")
+	archs := strings.Split(*archList, ",")
+	V("Building for %v_%v", kernels, archs)
 
 	// Build the target directory
 	// Start with a temporary directory
@@ -333,21 +330,27 @@ func main() {
 	if err := tree(d); err != nil {
 		log.Fatal(err)
 	}
-	bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
-	if err := os.MkdirAll(filepath.Join(d, bin), 0755); err != nil {
-		log.Fatal(err)
-	}
-
 	if err := getgo(d, version); err != nil {
 		log.Printf("getgo errored, %v, keep going", err)
 	}
-	if err := buildToolchain(d); err != nil {
-		log.Fatal(err)
+
+	// Some things need GOOS and GOARCH awareness in surprising ways. Modules are once such.
+	for _, kern := range kernels {
+		for _, arch := range archs {
+			bin = filepath.Join(fmt.Sprintf("%v_%v", kern, arch), "bin")
+			if err := os.MkdirAll(filepath.Join(d, bin), 0755); err != nil {
+				log.Fatal(err)
+			}
+
+			if err := buildToolchain(d, kern, arch); err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
 		log.Fatal(err)
 	}
-	if err := get(filepath.Join(d, "src"), append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
+	if err := get(filepath.Join(d, "src"), kernels, archs, append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
 		log.Fatalf("Getting packages: %v", err)
 	}
 
@@ -360,20 +363,24 @@ func main() {
 		baseToolPath = pwd
 	}
 	V("Build tools from %q", baseToolPath)
-	for _, tool := range []string{"installcommand", "init"} {
-		goBin := filepath.Join(d, bin, tool)
-		V("Build %q in %q, install to %q", tool, baseToolPath, goBin)
-		if err := build(d, baseToolPath, tool, goBin); err != nil {
-			log.Fatalf("Building %q -> %q: %v", goBin, tool, err)
+	for _, kern := range kernels {
+		for _, arch := range archs {
+			for _, tool := range []string{"installcommand", "init"} {
+				goBin := filepath.Join(d, bin, tool)
+				V("Build %q in %q, install to %q", tool, baseToolPath, goBin)
+				if err := build(d, baseToolPath, tool, goBin, kern, arch); err != nil {
+					log.Fatalf("Building %q -> %q: %v", goBin, tool, err)
+				}
+			}
+
 		}
 	}
-
 	if *outCPIO != "" {
 		if err := ramfs(d, *outCPIO); err != nil {
 			log.Printf("ramfs: %v", err)
 		}
 	}
-	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
-	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kern, arch)
+	log.Printf("sudo strace -o syscalltrace -f unshare -m chroot %q /%q_%q/bin/init", d, kernels, archs)
+	log.Printf("unshare -m chroot %q /%q_%q/bin/init", d, kernels, archs)
 	log.Printf("rsync -avz --no-owner --no-group -I %q somewhere", d)
 }
