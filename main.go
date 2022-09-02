@@ -334,6 +334,18 @@ func main() {
 		log.Printf("getgo errored, %v, keep going", err)
 	}
 
+	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := get(filepath.Join(d, "src"), kernels, archs, append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
+		log.Fatalf("Getting packages: %v", err)
+	}
+
+	baseToolPath := filepath.Join(d, bin)
+	if *development {
+		baseToolPath = pwd
+	}
+
 	// Some things need GOOS and GOARCH awareness in surprising ways. Modules are once such.
 	for _, kern := range kernels {
 		for _, arch := range archs {
@@ -345,26 +357,12 @@ func main() {
 			if err := buildToolchain(d, kern, arch); err != nil {
 				log.Fatal(err)
 			}
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(d, "src"), 0755); err != nil {
-		log.Fatal(err)
-	}
-	if err := get(filepath.Join(d, "src"), kernels, archs, append(flag.Args(), "git@github.com:u-root/sourcery")...); err != nil {
-		log.Fatalf("Getting packages: %v", err)
-	}
 
-	if err := files(d, bin, filepath.Join(d, bin)); err != nil {
-		log.Fatal(err)
-	}
+			if err := files(d, bin, filepath.Join(d, bin)); err != nil {
+				log.Fatal(err)
+			}
 
-	baseToolPath := filepath.Join(d, bin)
-	if *development {
-		baseToolPath = pwd
-	}
-	V("Build tools from %q", baseToolPath)
-	for _, kern := range kernels {
-		for _, arch := range archs {
+			V("Build tools from %q", baseToolPath)
 			for _, tool := range []string{"installcommand", "init"} {
 				goBin := filepath.Join(d, bin, tool)
 				V("Build %q in %q, install to %q", tool, baseToolPath, goBin)
@@ -372,9 +370,9 @@ func main() {
 					log.Fatalf("Building %q -> %q: %v", goBin, tool, err)
 				}
 			}
-
 		}
 	}
+
 	if *outCPIO != "" {
 		if err := ramfs(d, *outCPIO); err != nil {
 			log.Printf("ramfs: %v", err)
