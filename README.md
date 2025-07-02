@@ -1,5 +1,10 @@
 # sourcery
-A new take on u-root source mode, in the age of Go modules.
+
+A new take on [u-root](https://u-root.org/) source mode, in the age of
+[Go modules](https://go.dev/blog/using-go-modules).
+
+Sourcery has been [presented at openSUSE Conference 2022](
+https://media.ccc.de/v/3781-sourcery-a-multi-architecture-root-file-system-that-is-mostly-source).
 
 Sourcery is a program that builds root file systems consisting mostly
 of Go source code: of the 90,000 files in a typical sourcery root,
@@ -45,4 +50,4 @@ an strace command if you want to track what it does.
 unshare -m chroot "/tmp/sourcery3965857644" /linux_amd64/bin/init.
 ```
 
-Sourcery may be found at github.com:u-root/sourcery.
+Sourcery may be found at <https://github.com/u-root/sourcery>.
